@@ -1,145 +1,154 @@
-# 🚦 PoC 1.1: Distributed Rate Limiting Engines
+# 🚦 PoC 1.1: Rate Limiting Engines
 
 > **Domain:** Traffic Control & Reliability  
 > **Status:** ✅ Completed  
-> **Real-World Systems:** Stripe API, AWS API Gateway, Cloudflare Edge, Nginx
+> **Concepts:** Token Bucket, Leaky Bucket Meter, Sliding Window Log, Sliding Window Counter
 
----
+## What you will learn
 
-## 📌 Problem Overview
+Rate limiting decides whether a request may use a scarce resource *now*. It is a first line of defence for APIs and services: it limits abusive traffic, protects downstream dependencies during bursts, and enforces fair per-tenant quotas.
 
-In large-scale distributed architectures, rate limiting is the first line of defense against:
-1. **Resource Starvation / DoS**: Preventing rogue clients or misconfigured microservices from exhausting database connection pools and CPU threads.
-2. **Cascading Service Outages**: Flattening sudden flash traffic crowds before downstream services get overwhelmed.
-3. **Multi-Tenant Fairness**: Guaranteeing tier-based SLAs (e.g., Free vs Pro API tiers).
+This PoC implements four thread-safe, in-memory limiters and runs them through steady traffic, a flash crowd, and recovery. It is deliberately local and educational: a production deployment needs shared state, a client or route key, observability, and a defined failure policy.
 
----
+## Choose an algorithm in 30 seconds
 
-## 🔬 Algorithmic Deep Dive
+| If you need to… | Choose | Why | Main trade-off |
+| --- | --- | --- | --- |
+| Allow a short, legitimate burst while enforcing an average rate | **Token Bucket** | Accumulated tokens can be spent immediately | A large bucket can still spike a downstream service |
+| Limit the rate at which work is admitted to a buffer | **Leaky Bucket Meter** | The water level drains at a fixed rate | This PoC admits or rejects work; it does not queue and schedule work itself |
+| Enforce an exact rolling quota | **Sliding Window Log** | It records each accepted timestamp | Memory grows with requests in the window |
+| Use a rolling quota with predictable, constant memory | **Sliding Window Counter** | It estimates load from two adjacent windows | It is approximate near window boundaries |
 
-This PoC implements and benchmarks four rate limiting algorithms:
+## The shared request contract
 
-```
-                    ┌──────────────────────────────────────────────┐
-                    │            INCOMING HTTP REQUESTS            │
-                    └──────────────────────┬───────────────────────┘
-                                           │
-         ┌──────────────────┬──────────────┴─────┬──────────────────┐
-         │                  │                    │                  │
-         ▼                  ▼                    ▼                  ▼
-┌──────────────────┐┌──────────────────┐┌──────────────────┐┌──────────────────┐
-│   TOKEN BUCKET   ││   LEAKY BUCKET   ││SLIDING WINDOW LOG││  SLIDING WINDOW  │
-│                  ││                  ││                  ││     COUNTER      │
-│ Refills tokens   ││ Constant rate    ││ Exact timestamp  ││ Weighted average │
-│ at rate 'r'      ││ output queue     ││ history in deque ││ of rolling windows│
-│ (Allows Bursts)  ││ (Traffic Shaper) ││ (High Memory O(N)││ (Low Memory O(1))│
-└──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘
+Every limiter exposes the same operation:
+
+```python
+allowed = limiter.allow_request(tokens=1)
 ```
 
-### 1. Token Bucket
-- **Mechanism**: A bucket with capacity $C$ continuously accumulates tokens at rate $r$ tokens/second. When a request arrives, $1$ (or $k$) tokens are deducted. If tokens $< k$, the request is dropped (HTTP 429).
-- **Refill Math**:
-  $$\text{tokens} = \min\Big(C, \text{tokens} + (\text{now} - \text{last\_refill}) \times r\Big)$$
-- **Pros**: $O(1)$ memory and CPU; gracefully handles short legitimate bursts up to capacity $C$.
-- **Used by**: Stripe, AWS API Gateway, GitHub REST API.
+`True` means the request was admitted; `False` means the caller should reject it, normally with HTTP `429 Too Many Requests`. The implementation also exposes `get_stats()` for the simulator and `reset()` for a fresh state.
 
----
+All state changes are protected by a lock, so a single process can safely serve concurrent threads. The algorithms use `time.monotonic()` rather than wall-clock time, preventing NTP or system-clock changes from moving a limit backwards or forwards.
 
-### 2. Leaky Bucket
-- **Mechanism**: Requests enter a FIFO queue (capacity $C$). Requests leak out and are processed at a strictly constant rate. If incoming traffic exceeds queue capacity, new requests overflow and drop.
-- **Leak Math**:
-  $$\text{water\_level} = \max\Big(0, \text{water\_level} - (\text{now} - \text{last\_leak}) \times \text{leak\_rate}\Big)$$
-- **Pros**: Eliminates bursts completely, ensuring a perfectly smooth, constant downstream consumption rate.
-- **Used by**: Nginx `limit_req`, Shopify API, network packet traffic shaping.
+## How the four algorithms work
 
----
+### 1. Token Bucket — burst-friendly average rate
 
-### 3. Sliding Window Log
-- **Mechanism**: Maintains a timestamped sorted log of all accepted requests. On every incoming request, timestamps older than $(\text{now} - \text{window\_duration})$ are pruned. If the remaining count $< \text{limit}$, request is accepted.
-- **Pros**: 100% accurate sliding rate limit with zero boundary burst exploits.
-- **Cons**: High memory consumption ($O(N)$ per client), where $N$ is the number of requests in the window.
-- **Used by**: Critical financial transaction endpoints, strict authentication failure rate limiting.
+A bucket starts full with capacity `C`. It gains `r` tokens per second, up to `C`. A request costing `k` tokens succeeds only when at least `k` tokens are present.
 
----
+$$
+\text{tokens} = \min(C, \text{tokens} + (\text{now} - \text{last refill}) \times r)
+$$
 
-### 4. Sliding Window Counter (Cloudflare Hybrid)
-- **Mechanism**: Divides time into discrete fixed windows. When evaluating a request at time $t$ in the current window, it calculates a weighted sum combining the previous window's total and the current window's accumulated count.
-- **Estimation Formula**:
-  $$\text{weight} = \frac{\text{window\_size} - (\text{now} - \text{current\_window\_start})}{\text{window\_size}}$$
-  $$\text{estimated\_requests} = (\text{previous\_window\_count} \times \text{weight}) + \text{current\_window\_count}$$
-- **Pros**: $O(1)$ memory (only 2 integer counters), smooths out fixed-window boundary spikes.
-- **Used by**: Cloudflare edge DDoS mitigation.
+- **Time / space:** $O(1)$ / $O(1)$
+- **Good for:** public APIs, tenant plans, and workloads that should tolerate short bursts.
+- **Example:** capacity 20 and refill rate 10/s allows an immediate burst of 20, then sustains 10 requests per second.
 
----
+### 2. Leaky Bucket Meter — drain a bounded backlog
 
-## 📊 Comparison Matrix
+The limiter tracks an abstract `water_level`. Each admitted request adds water; elapsed time drains it at rate `r`. A request is rejected when adding it would exceed capacity `C`.
 
-| Algorithm | Time Complexity | Space Complexity | Supports Bursts? | Memory Footprint | Edge Case / Drawback |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **Token Bucket** | $O(1)$ | $O(1)$ | ✅ Yes (up to $C$) | Low ($\approx$ 16 bytes) | Can cause downstream spikes if burst capacity is high |
-| **Leaky Bucket** | $O(1)$ | $O(1)$ | ❌ No (smooths) | Low ($\approx$ 16 bytes) | Bursts suffer latency or packet drop |
-| **Sliding Window Log** | $O(M)$ eviction | $O(N)$ | ❌ No | High ($\propto$ req count) | Memory bloat under high throughput attacks |
-| **Sliding Window Counter** | $O(1)$ | $O(1)$ | ⚠️ Approximate | Low ($\approx$ 24 bytes) | Assumes uniform request distribution in previous window |
+$$
+\text{water level} = \max(0, \text{water level} - (\text{now} - \text{last leak}) \times r)
+$$
 
----
+- **Time / space:** $O(1)$ / $O(1)$
+- **Good for:** deciding whether a bounded downstream buffer can absorb more work.
+- **Important distinction:** a full traffic shaper stores requests in a FIFO queue and releases them on a schedule. This implementation is a *meter*: it admits or rejects immediately and does not retain request payloads.
 
-## 🌐 Scaling to Distributed Systems (Redis Pattern)
+### 3. Sliding Window Log — exact rolling limit
 
-In a multi-server setup, in-memory limiters don't share state across multiple API gateway nodes. Production systems use **Redis** with **Atomic Lua Scripts**:
+For every accepted token, the limiter records a timestamp. Before evaluating a request, it removes timestamps outside the last window. The incoming request is allowed only if the remaining count plus its token cost fits the limit.
 
-### Token Bucket in Redis Lua (Atomic Execution)
+- **Time / space:** $O(M)$ eviction / $O(N)$, where $M$ is expired entries removed and $N$ is accepted tokens in the window.
+- **Good for:** strict limits such as login attempts or sensitive transaction endpoints.
+- **Trade-off:** precision costs memory and timestamp maintenance.
+
+### 4. Sliding Window Counter — low-memory approximation
+
+The limiter keeps a count for the current fixed window and the prior one. It weights the prior count by how much of that window overlaps the current rolling interval.
+
+$$
+\text{weight} = \frac{\text{window size} - \text{time into current window}}{\text{window size}}
+$$
+
+$$
+\text{estimated load} = (\text{previous count} \times \text{weight}) + \text{current count}
+$$
+
+- **Time / space:** $O(1)$ / $O(1)$
+- **Good for:** high-throughput services where a small approximation error is acceptable.
+- **Trade-off:** it assumes requests in the previous window were evenly distributed, which is not always true.
+
+## Compare the trade-offs
+
+| Algorithm | Burst handling | Accuracy | Memory | Best fit |
+| --- | --- | --- | --- | --- |
+| Token Bucket | Allows bursts up to capacity | Exact for the configured token model | Constant | General API quotas |
+| Leaky Bucket Meter | Bounds the modeled backlog | Exact for the configured meter | Constant | Downstream-buffer protection |
+| Sliding Window Log | Prevents boundary bursts | Exact rolling count | Proportional to recent traffic | Security and strict quotas |
+| Sliding Window Counter | Smooths fixed-window boundaries | Approximate rolling count | Constant | High-volume edge/API limits |
+
+## Run the PoC
+
+Run commands from the repository root using the project virtual environment:
+
+```powershell
+.venv\Scripts\python.exe -m pytest 01-traffic-control\rate-limiters\test_rate_limiters.py -v
+.venv\Scripts\python.exe 01-traffic-control\rate-limiters\simulate.py
+```
+
+The test suite covers basic behavior, refill/expiry behavior, multi-token requests, and concurrent access. The simulator applies three phases to the same limiter instances:
+
+1. **Steady traffic:** 8 requests/sec, below the configured sustained rates.
+2. **Flash crowd:** 50 requests/sec, deliberately above the limits.
+3. **Recovery:** 8 requests/sec after the burst.
+
+For each phase, compare **Allowed**, **Rejected**, and **Pass Rate**. Token and leaky bucket configurations begin the burst with spare capacity; the sliding-window algorithms enforce their ten-requests-per-second policy more tightly. The final table shows cumulative requests and each limiter's remaining internal state.
+
+## From a local PoC to a distributed limiter
+
+The included Python classes keep state in one process. If several API instances serve a client, each instance would otherwise give that client an independent allowance. A production limiter normally stores state in a shared system such as Redis and executes its read–refill–consume sequence atomically, commonly with a Lua script.
+
+At minimum, a production design must define:
+
+- A stable key, such as `ratelimit:{tenant}:{route}`.
+- Atomic state updates across all application instances.
+- Key expiration based on the refill horizon.
+- Behavior when the shared limiter is unavailable: fail open for availability, or fail closed for protection.
+- Metrics, including allowed/rejected counts, latency, and hot keys.
+
+### Redis token bucket sketch
+
 ```lua
--- KEYS[1]: client rate limit key (e.g., "ratelimit:user:123")
--- ARGV[1]: capacity
--- ARGV[2]: refill_rate_per_sec
--- ARGV[3]: current_timestamp
--- ARGV[4]: tokens_requested
-
-local key = KEYS[1]
+-- KEYS[1]: e.g. "ratelimit:user:123"
+-- ARGV: capacity, refill rate/sec, current timestamp, requested tokens
 local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])
 local now = tonumber(ARGV[3])
 local requested = tonumber(ARGV[4])
 
-local data = redis.call("HMGET", key, "tokens", "last_refill")
-local tokens = tonumber(data[1]) or capacity
-local last_refill = tonumber(data[2]) or now
+local state = redis.call("HMGET", KEYS[1], "tokens", "last_refill")
+local tokens = tonumber(state[1]) or capacity
+local last_refill = tonumber(state[2]) or now
 
--- Replenish tokens
-local elapsed = math.max(0, now - last_refill)
-tokens = math.min(capacity, tokens + (elapsed * refill_rate))
-
-if tokens >= requested then
-    tokens = tokens - requested
-    redis.call("HMSET", key, "tokens", tokens, "last_refill", now)
-    redis.call("EXPIRE", key, math.ceil(capacity / refill_rate))
-    return 1 -- ALLOWED
-else
-    return 0 -- REJECTED (HTTP 429)
+tokens = math.min(capacity, tokens + math.max(0, now - last_refill) * refill_rate)
+if tokens < requested then
+    return 0
 end
+
+redis.call("HMSET", KEYS[1], "tokens", tokens - requested, "last_refill", now)
+redis.call("EXPIRE", KEYS[1], math.ceil(capacity / refill_rate))
+return 1
 ```
 
----
+## HTTP response guidance
 
-## 🚀 Running Tests and Simulation
+When rejecting a request, return `429 Too Many Requests`. Include a `Retry-After` value when you can calculate it, and expose rate-limit headers consistently with your API contract. Do not treat the exact header names below as universal: several standards and vendor conventions coexist.
 
-Ensure your virtual environment is active:
-
-```bash
-# Run unit & concurrency tests
-pytest 01-traffic-control/rate-limiters/test_rate_limiters.py -v
-
-# Run multi-threaded stress and telemetry simulation
-python 01-traffic-control/rate-limiters/simulate.py
-```
-
-### Standard HTTP 429 Response Headers
-When rate limiting in production, always return standard informative headers:
 ```http
 HTTP/1.1 429 Too Many Requests
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1709280000
 Retry-After: 30
 Content-Type: application/json
 
