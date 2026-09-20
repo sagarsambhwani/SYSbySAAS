@@ -16,7 +16,7 @@ This roadmap outlines all core Proof-of-Concepts (PoCs) designed to master distr
 | PoC | Core Problem / Algorithm | Real-World Analog | Status | Difficulty |
 | :--- | :--- | :--- | :---: | :---: |
 | **1.1 Rate Limiting Engines** | Token Bucket, Leaky Bucket, Sliding Window Log, Sliding Window Counter | Cloudflare API Shield, Stripe API Limiter | ✅ Completed | Easy-Medium |
-| **1.2 Circuit Breaker & Fallback** | Finite State Machine (Closed $\to$ Open $\to$ Half-Open), Failure Rate Thresholds, Timeout Recovery | Netflix Hystrix, Resilience4j | ⏳ Planned | Medium |
+| **1.2 Circuit Breaker & Fallback** | Finite State Machine (Closed $\to$ Open $\to$ Half-Open), Failure Rate Thresholds, Timeout Recovery | Netflix Hystrix, Resilience4j | ✅ Completed | Medium |
 | **1.3 Adaptive Load Shedding** | Latency-based congestion control, PID queue draining | Envoy Gateway, AWS Load Balancer | ⏳ Planned | Hard |
 
 ---
