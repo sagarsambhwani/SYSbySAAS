@@ -26,7 +26,7 @@ This roadmap outlines all core Proof-of-Concepts (PoCs) designed to master distr
 | PoC | Core Problem / Algorithm | Real-World Analog | Status | Difficulty |
 | :--- | :--- | :--- | :---: | :---: |
 | **2.1 Consistent Hashing Ring** | MD5/SHA hash ring, Virtual Nodes (vnodes), Minimal key migration on churn | Amazon DynamoDB, Apache Cassandra, Discord Cache | ✅ Completed | Medium |
-| **2.2 Bloom Filter & Scalable Filter** | Bit array, multiple independent hash functions, False positive rate tuning | Google Bigtable, Apache Cassandra (SSTable skip) | ⏳ Planned | Easy-Medium |
+| **2.2 Bloom Filter & Scalable Filter** | Bit array, multiple independent hash functions, False positive rate tuning | Google Bigtable, Apache Cassandra (SSTable skip) | ✅ Completed | Easy-Medium |
 | **2.3 LSM-Tree & Write-Ahead Log (WAL)** | Append-only WAL, In-memory MemTable (SkipList/AVL), On-disk SSTable, Leveled/Tiered Compaction | RocksDB, LevelDB, Cassandra Storage Engine | ⏳ Planned | Hard |
 
 ---
