@@ -36,7 +36,7 @@ This roadmap outlines all core Proof-of-Concepts (PoCs) designed to master distr
 | PoC | Core Problem / Algorithm | Real-World Analog | Status | Difficulty |
 | :--- | :--- | :--- | :---: | :---: |
 | **3.1 Distributed 64-bit ID Gen** | Timestamp (41b) + Worker ID (10b) + Sequence (12b) bitwise ID generator | Twitter Snowflake, Instagram Sharding ID | ✅ Completed | Easy |
-| **3.2 Distributed Lock & Fencing** | Redis-style single/multi-instance lock with TTL, heartbeat lease renewal, monotonic fencing tokens | Redlock, ZooKeeper Ephemeral Nodes | ⏳ Planned | Medium-Hard |
+| **3.2 Distributed Lock & Fencing** | Redis-style single/multi-instance lock with TTL, heartbeat lease renewal, monotonic fencing tokens | Redlock, ZooKeeper Ephemeral Nodes | ✅ Completed | Medium-Hard |
 | **3.3 Mini Raft Consensus** | Leader election, Heartbeat timeouts, Term transitions, Split-vote mitigation | etcd, HashiCorp Consul, Apache Kafka (KRaft) | ⏳ Planned | Hard |
 
 ---
