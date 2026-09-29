@@ -45,7 +45,7 @@ This roadmap outlines all core Proof-of-Concepts (PoCs) designed to master distr
 
 | PoC | Core Problem / Algorithm | Real-World Analog | Status | Difficulty |
 | :--- | :--- | :--- | :---: | :---: |
-| **4.1 Thundering Herd & SingleFlight** | Cache Stampede prevention via Mutex/In-flight promise coalescing | Go `sync/singleflight`, Facebook Cache Tier | ⏳ Planned | Medium |
+| **4.1 Thundering Herd & SingleFlight** | Cache Stampede prevention via Mutex/In-flight promise coalescing | Go `sync/singleflight`, Facebook Cache Tier | ✅ Completed | Medium |
 | **4.2 Multi-Tier LRU / LFU Cache** | In-memory L1 cache with fast eviction + Distributed L2 cache + Write-through / Write-back | Redis, Memcached, CDN Edge Cache | ⏳ Planned | Medium |
 | **4.3 Read-Repair & Quorum Replicas** | Quorum consistency ($R + W > N$), Read-repair on stale replica detection | Apache Cassandra, Amazon Dynamo | ⏳ Planned | Hard |
 
