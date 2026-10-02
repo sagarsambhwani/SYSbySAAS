@@ -55,7 +55,7 @@ This roadmap outlines all core Proof-of-Concepts (PoCs) designed to master distr
 
 | PoC | Core Problem / Algorithm | Real-World Analog | Status | Difficulty |
 | :--- | :--- | :--- | :---: | :---: |
-| **5.1 Idempotency Key Engine** | Request fingerprinting, In-progress status locking, Response payload caching & atomic replay | Stripe Payment API, PayPal Webhooks | ⏳ Planned | Medium |
+| **5.1 Idempotency Key Engine** | Request fingerprinting, In-progress status locking, Response payload caching & atomic replay | Stripe Payment API, PayPal Webhooks | ✅ Completed | Medium |
 | **5.2 Dead Letter Queue & Exponential Backoff** | Exponential backoff with Full Jitter, DLQ routing after max retries | AWS SQS, Apache Kafka Error Handlers | ⏳ Planned | Easy-Medium |
 | **5.3 Saga Pattern (Orchestrator)** | Multi-service distributed transaction with compensating forward/rollback actions | Uber Ride Booking, E-Commerce Checkout | ⏳ Planned | Hard |
 
