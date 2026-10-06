@@ -65,7 +65,7 @@ This roadmap outlines all core Proof-of-Concepts (PoCs) designed to master distr
 
 | PoC | Core Problem / Algorithm | Real-World Analog | Status | Difficulty |
 | :--- | :--- | :--- | :---: | :---: |
-| **6.1 Geohash Proximity Engine** | Base32 Geohashing, 8-neighbor bounding box search, Distance filtering | Uber Driver Dispatch, Yelp Restaurant Finder | ⏳ Planned | Medium |
+| **6.1 Geohash Proximity Engine** | Base32 Geohashing, 8-neighbor bounding box search, Distance filtering | Uber Driver Dispatch, Yelp Restaurant Finder | ✅ Completed | Medium |
 | **6.2 Inverted Index & BM25 Search** | Text tokenization, stopword filtering, Posting lists with term frequencies & BM25 ranking | Elasticsearch, Apache Lucene | ⏳ Planned | Medium-Hard |
 
 ---
