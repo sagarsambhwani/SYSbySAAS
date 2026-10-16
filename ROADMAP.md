@@ -94,7 +94,7 @@ This roadmap outlines all core Proof-of-Concepts (PoCs) designed to master distr
 
 | PoC | Core Problem / Algorithm | Real-World Analog | Status | Difficulty |
 | :--- | :--- | :--- | :---: | :---: |
-| **9.1 Feature Flags & Emergency Kill Switches** | Dynamic rule evaluation, percentage rollout hashing, immediate global kill switches | LaunchDarkly, Flipt, Unleash | ⏳ Planned | Easy-Medium |
+| **9.1 Feature Flags & Emergency Kill Switches** | Dynamic rule evaluation, percentage rollout hashing, immediate global kill switches | LaunchDarkly, Flipt, Unleash | ✅ Completed | Easy-Medium |
 | **9.2 Cell-Based Architecture Partitioning** | Complete failure-domain isolation, deterministic cell routing, blast radius containment | AWS Cellular Architecture, Slack Cells | ⏳ Planned | Hard |
 | **9.3 Immutable Audit Trail & Tamper-Evident Ledger** | Cryptographic hash chaining, Merkle tree verification, append-only compliance logging | AWS CloudTrail, Amazon QLDB, Git Commit Chains | ⏳ Planned | Medium-Hard |
 
